@@ -1,0 +1,9 @@
+version: '2.1'
+services:
+  jenkins_master:
+    container_name: jenkinsMaster
+    extends:
+      file: docker/base.yml
+      service: base
+    ports:
+      - "8080:80"
