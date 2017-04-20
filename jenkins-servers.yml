@@ -2,4 +2,4 @@
   roles: 
     - common
     - jenkins_master
-  vars:
+  #vars:
