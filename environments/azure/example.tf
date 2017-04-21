@@ -1,43 +1,79 @@
-#Note must have a defined secrets .tf file with aws credentials. See https://www.terraform.io/intro/getting-started/variables.html for more info
-
-#Define AWS parameters
-provider "aws" {  
-  access_key = "${var.access_key}"
-  secret_key = "${var.secret_key}"
-  region     = "${var.region}"
+# Configure Microsoft Azure Provider
+provider "azurerm" {
+  subscription_id = "${var.subscription_id}"
+  client_id       = "${var.client_id}"
+  client_secret   = "${var.client_secret}"
+  tenant_id       = "${var.tenant_id}"
 }
 
-#Demo security group only. It is NOT recommended to use this. 
-resource "aws_security_group" "allow_all" {
-    name        = "allow_all"
-    description = "Allow all inbound traffic"
-
-    ingress {
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
-      cidr_blocks = ["0.0.0.0/0"]
-    } 
-
-    egress {
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
-      cidr_blocks = ["0.0.0.0/0"]  
-    }
-
-    tags {
-      Name = "allow_all"
-    }
+#Create Jenkins resource group
+resource "azurerm_resource_group" "jenkins" {
+  name     = "jenkins"
+  location = "East US"
 }
 
-#EC2 Resource Definitions
-resource "aws_instance" "jenkins_master" {
-  ami           = "ami-2757f631"
-  instance_type = "t2.micro"
-  associate_public_ip_address = true
+#Create Jenkins public security group
+resource "azurerm_network_security_group" "jenkinsPublic" {
+  name                = "jenkinsPublic"
+  location            = "East US"
+  resource_group_name = "${azurerm_resource_group.jenkins.name}"
+
+  security_rule {
+    name                       = "test123"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 
   tags {
-      name = "JenkinsMaster"
+    environment = "jenkins"
+  }
+}
+
+#Create Jenkins Private security group
+resource "azurerm_network_security_group" "jenkinsPrivate" {
+  name                = "jenkinsPrivate"
+  location            = "East US"
+  resource_group_name = "${azurerm_resource_group.jenkins.name}"
+
+  security_rule {
+    name                       = "test123"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "10.0.0.0/16"
+    destination_port_range     = "*"
+    source_address_prefix      = "10.0.0.0/16"
+    destination_address_prefix = "*"
+  }
+
+  tags {
+    environment = "Production"
+  }
+}
+
+#Create Jenkins vnet
+resource "azurerm_virtual_network" "network"{
+  name          = "jenkinsNetwork"
+  address_space = ["10.0.0.0/16"]
+  location      = "East US"
+  resource_group_name = "${azurerm_resource_group.jenkins.name}"
+
+  subnet {
+    name                = "public_subnet_1"
+    address_prefix      = "10.0.1.0/24"
+    security_group      = "${azurerm_network_security_group.jenkinsPublic.id}"
+  }
+
+  subnet { 
+    name                = "private_subnet_1"
+    address_prefix      = "10.0.2.0/24"
+    security_group      = "${azurerm_network_security_group.jenkinsPrivate.id}"
   }
 }
